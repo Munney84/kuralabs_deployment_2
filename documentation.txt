@@ -1,0 +1,77 @@
+Deployment 2 Documentation
+
+Steps to set up a CI/CD piepline from start to finish using Elastic Beanstalk.
+
+	1	Create Amazon EC2 with Ubuntu image
+	  a	select Key pair **
+	  b	under network settings create a security group or use an existing group and set ports
+	  c	lauch instance
+	
+  2	Install Jenkins on the EC2
+	  a	ssh into EC2 from the location of the Key pair (.pem file): $ssh -i {key}.pem @ubuntu{Public IPv4 DNS}
+	  b	$curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io.key | sudo tee  /usr/share/keyrings/jenkins-keyring.asc > /dev/null
+	  c	 $echo deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] \ https://pkg.jenkins.io/debian-stable binary/ | sudo tee \ /etc/apt/sources.list.d/jenkins.list > /dev/null
+	  d	$sudo apt-get update
+	  e	 $sudo apt-get install jenkins
+	  f	$sudo systemctl start jenkins **
+	
+  3	Install Python on the EC2
+	  a	$sudo apt install python3
+	  b	$sudo apt install python3-venv
+	
+  
+  4	Create Github access token
+	  a	Fork the desired repository
+	  b	Navigate to Github setting and select "developer settings"
+	  c	Select "personal access tokens" and choose the settings for the token’s permissions
+	
+  5	Create Multibrach build in Jenkins
+	  a	Log in to Jenkins and select "new item”
+	  b	Enter an Item name and select “Multibranch Pipeline”
+	  c	Enter display name and brief description
+	  d	Add a branch source and select “Github”
+	  e	Click “Add” and select Jenkins
+	  f	Use Github username for username and the token for the password **
+	  g	Click “save” and then “apply”, build will start automatically 
+	
+  6	Activate Jenkins user on EC2
+	  a	$sudo passwd jenkins
+	  b	$sudo su - jenkins -s /bin/bash
+	
+  7	Create Jenkins user in AWS
+	  a	Go to IAM in AWS console and locate Users option in Access Management 
+	  b	Add user by inputting a name and giving programmatic access: click “Next"
+	  c	Select “attach existing policies directly”: click “Next” for this page and the next
+	  d	Create user amd save a copy of the “access key ID” and “secret access key”
+	
+  8	Install AWS CLI on Jenkins EC2
+	  a	$curl “https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip” -o “awscliv2.zip”
+	  b	$unzip awscliv2.zip **
+	  c	$sudo ./aws/install
+	  d	$aws —version (to check)
+	  e	$aws configure (configure AWS CLI needs Access Key ID and Secret Access key)
+	
+  9	Install EB CLI in jenkins EC2
+	  a	$pip install awsebcli —upgrade —user
+	  b	$eb —version (to check) **
+	
+  10	Deploy app from Elastic Beanstalk
+	  a	$sudo su - jenkins -s /bin/bash
+	  b	$cd /var/lib/jenkins/wrokspace/{{name of project}} **
+	  c	$eb init (select: us-east 1, select: python, select: latest version of python, select: N for code commit)
+	  d	$eb create (take default for the next 3 questions, Spot Fleet: no)
+	  e	Environment being created, check jenkins to rebuild and check
+	
+  11	Add Deployment stage to pipeline
+	  a	edit Jenkinsfile
+
+** Issues/Notes:
+	i	Create Amazon EC2- must use Key Pair to ssh into the EC2, if no key pair exists create a new key pair and give 400 permissions (chmod 400 {key pair}.pem)
+	ii	Install jenkins- check if jenkins installed and started correctly by: $sudo systemctl status jenkins
+	iii	Create multi branch build- Enter your URL of the forked repository to validate 
+	  1	Build configuration mode should read “by Jenkinsfile” and Script Path should read “Jenkinsfile”
+	iv	Instll AWS CLI- Once file was curled could not unzip because unzip not downloaded and jenkins was not in sudoers file.  Solved by exiting to ubuntu and downloaded unzip via $apt install unzip
+	  1	$./aws/install could not run because jenkins not in sudoers file. Exit out to ubuntu and install or download AWS CLI as ubunut user and not jenkins user. ANother option would be to put jenkins into the sudoer file by $sudo visudo and adding “jenkins ALL = (ALL) NOPASSWD: ALL” to /etc/sudoers
+	v	$eb —version- command not found error. "After running $pip install awsebcli —upgrade —user” the warning states several scripts are installed in a location not on PATH. Solved by appending the location to the PATH with $export PATH=$PATH:{locationof scripts in warning}
+	vi	Logging into Jenkins- initial setup was for only ssh permission. Solved by editing security groups in AWS.
+	vii	Deploying Elastic Beanstalk- cd /var/workspaces error: no such directory. solved by entering corect path: /var/lib/jenkins/workspace
